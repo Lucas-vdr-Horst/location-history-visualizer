@@ -67,6 +67,13 @@
 		$( '#working' ).removeClass( 'hidden' );
 
 		var latlngs = [];
+		function done() {
+			status( 'Generating map...' );
+			heat._latlngs = latlngs;
+
+			heat.redraw();
+			stageThree(  /* numberProcessed */ latlngs.length );
+		}
 
 		var os = new oboe();
 
@@ -86,14 +93,35 @@
 			}
 		
 			return oboe.drop;
-		} ).done( function () {
-			status( 'Generating map...' );
-			heat._latlngs = latlngs;
+		} ).done(done);
 
-			heat.redraw();
-			stageThree(  /* numberProcessed */ latlngs.length );
+		os.node('*.activity', function (entry) {
+			if (!entry.start || !entry.end) return oboe.drop; // Ensure the fields exist
 
-		} );
+			// Extract latitude and longitude from the 'start' and 'end' strings
+			var startMatch = entry.start.match(/geo:([-+]?[0-9]*\.?[0-9]+),([-+]?[0-9]*\.?[0-9]+)/);
+			var endMatch = entry.end.match(/geo:([-+]?[0-9]*\.?[0-9]+),([-+]?[0-9]*\.?[0-9]+)/);
+
+			if (startMatch) {
+				var startLatitude = parseFloat(startMatch[1]);
+				var startLongitude = parseFloat(startMatch[2]);
+
+				if (!isNaN(startLatitude) && !isNaN(startLongitude)) {
+					latlngs.push([startLatitude, startLongitude]);
+				}
+			}
+
+			if (endMatch) {
+				var endLatitude = parseFloat(endMatch[1]);
+				var endLongitude = parseFloat(endMatch[2]);
+
+				if (!isNaN(endLatitude) && !isNaN(endLongitude)) {
+					latlngs.push([endLatitude, endLongitude]);
+				}
+			}
+
+			return oboe.drop;
+		}).done(done);
 
 		var fileSize = prettySize( file.size );
 
