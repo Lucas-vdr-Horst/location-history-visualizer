@@ -66,20 +66,25 @@
 		$( '#intro' ).addClass( 'hidden' );
 		$( '#working' ).removeClass( 'hidden' );
 
-		var SCALAR_E7 = 0.0000001; // Since Google Takeout stores latlngs as integers
 		var latlngs = [];
 
 		var os = new oboe();
 
-		os.node( 'locations.*', function ( location ) {
-			var latitude = location.latitudeE7 * SCALAR_E7,
-				longitude = location.longitudeE7 * SCALAR_E7;
-
-			// Handle negative latlngs due to google unsigned/signed integer bug.
-			if ( latitude > 180 ) latitude = latitude - (2 ** 32) * SCALAR_E7;
-			if ( longitude > 180 ) longitude = longitude - (2 ** 32) * SCALAR_E7;
-
-			if ( type === 'json' ) latlngs.push( [ latitude, longitude ] );
+		os.node('semanticSegments.*.timelinePath.*', function (entry) {
+			if (!entry.point) return oboe.drop; // Ensure the field exists
+		
+			// Extract latitude and longitude from the 'point' string
+			var match = entry.point.match(/([-+]?[0-9]*\.?[0-9]+)°,\s*([-+]?[0-9]*\.?[0-9]+)°/);
+		
+			if (match) {
+				var latitude = parseFloat(match[1]);
+				var longitude = parseFloat(match[2]);
+		
+				if (type === 'json' && !isNaN(latitude) && !isNaN(longitude)) {
+					latlngs.push([latitude, longitude]);
+				}
+			}
+		
 			return oboe.drop;
 		} ).done( function () {
 			status( 'Generating map...' );
@@ -182,17 +187,16 @@
 		var prettyFileSize = prettySize(fileSize);
 		var chunkSize = 512 * 1024; // bytes
 		var offset = 0;
-		var self = this; // we need a reference to the current object
 		var chunkReaderBlock = null;
-		var startTime = Date.now();
-		var endTime = Date.now();
-		var readEventHandler = function ( evt ) {
-			if ( evt.target.error == null ) {
-				offset += evt.target.result.length;
-				var chunk = evt.target.result;
-				var percentLoaded = ( 100 * offset / fileSize ).toFixed( 0 );
-				status( percentLoaded + '% of ' + prettyFileSize + ' loaded...' );
-				oboeInstance.emit( 'data', chunk ); // callback for handling read chunk
+		var decoder = new TextDecoder("utf-8");
+
+		var readEventHandler = function (evt) {
+			if (evt.target.error == null) {
+				offset += evt.target.result.byteLength;
+				var chunk = decoder.decode(evt.target.result, { stream: true }); // Preserve multi-byte characters
+				var percentLoaded = (100 * offset / fileSize).toFixed(0);
+				status(percentLoaded + "% of " + prettyFileSize + " loaded...");
+				oboeInstance.emit("data", chunk);
 			} else {
 				return;
 			}
@@ -200,17 +204,15 @@
 				oboeInstance.emit( 'done' );
 				return;
 			}
+			chunkReaderBlock(offset, chunkSize, file);
+		};
 
-			// of to the next chunk
-			chunkReaderBlock( offset, chunkSize, file );
-		}
-
-		chunkReaderBlock = function ( _offset, length, _file ) {
+		chunkReaderBlock = function (_offset, length, _file) {
 			var r = new FileReader();
-			var blob = _file.slice( _offset, length + _offset );
+			var blob = _file.slice(_offset, length + _offset);
 			r.onload = readEventHandler;
-			r.readAsText( blob );
-		}
+			r.readAsArrayBuffer(blob); // Use ArrayBuffer instead of readAsText
+		};
 
 		// now let's start the read with the first block
 		chunkReaderBlock( offset, chunkSize, file );
