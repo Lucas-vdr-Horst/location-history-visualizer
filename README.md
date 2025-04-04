@@ -1,6 +1,6 @@
 # location-history-visualizer
 > **Note**  
-> The original project seemed obandoned. This version is up to date, to work with the json format as of 2025.  
+> The original project seemed abandoned. This version is up to date, and is compatible with the updated Google Maps history export.
 > And merged some minor fixes from open pull requests and forks.
 
 **Available online: [https://lucas-vdr-horst.github.io/location-history-visualizer/](https://lucas-vdr-horst.github.io/location-history-visualizer/)**
